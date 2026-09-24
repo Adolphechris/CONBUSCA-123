@@ -448,3 +448,68 @@ class MouvementCaisseChargesPersonnelles(models.Model):
                 if self.valeur_usd is not None and self.valeur_usd != original.valeur_usd:
                     raise ValidationError("La valeur USD historique ne peut pas être modifiée.")
         return super().clean()
+
+
+class DemandeDecaissement(models.Model):
+    EN_ATTENTE = 'EN_ATTENTE'
+    APPROUVEE = 'APPROUVEE'
+    REFUSEE = 'REFUSEE'
+    EXECUTEE = 'EXECUTEE'
+
+    STATUT_CHOICES = [
+        (EN_ATTENTE, 'En attente de validation Direction'),
+        (APPROUVEE, 'Approuvée (prête pour exécution caissier)'),
+        (REFUSEE, 'Refusée'),
+        (EXECUTEE, 'Exécutée (sortie effectuée)'),
+    ]
+
+    caisse = models.ForeignKey(CaisseCourante, on_delete=models.CASCADE, related_name='demandes_decaissement')
+    demandeur = models.ForeignKey('users.CustomUser', on_delete=models.SET_NULL, null=True, related_name='decaissements_demandes')
+    date_demande = models.DateTimeField(auto_now_add=True)
+    montant = models.DecimalField(max_digits=18, decimal_places=2, help_text="Montant demandé par le caissier")
+    montant_approuve = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True, help_text="Montant validé par l'administrateur")
+    rubrique = models.ForeignKey(RubriqueCaisse, on_delete=models.PROTECT, related_name='demandes_decaissement')
+    sous_rubrique = models.ForeignKey(SousRubriqueCaisse, on_delete=models.PROTECT, null=True, blank=True)
+    caisse_destination = models.ForeignKey('Caisse', on_delete=models.SET_NULL, null=True, blank=True, related_name='transferts_demandes')
+    fournisseur = models.ForeignKey('fournisseurs.Fournisseur', on_delete=models.SET_NULL, null=True, blank=True)
+    client = models.ForeignKey('clients.Client', on_delete=models.SET_NULL, null=True, blank=True)
+    creancier = models.ForeignKey('creanciers.Creancier', on_delete=models.SET_NULL, null=True, blank=True)
+    debiteur = models.ForeignKey('creanciers.Debiteur', on_delete=models.SET_NULL, null=True, blank=True)
+    agent = models.ForeignKey('paie.Agent', on_delete=models.SET_NULL, null=True, blank=True)
+    motif = models.CharField(max_length=255)
+    reference = models.CharField(max_length=100, blank=True, null=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default=EN_ATTENTE)
+    valide_par = models.ForeignKey('users.CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name='decaissements_approuves')
+    date_decision = models.DateTimeField(null=True, blank=True)
+    commentaire_decision = models.TextField(blank=True, null=True)
+    mouvement_caisse = models.OneToOneField('MouvementCaisse', on_delete=models.SET_NULL, null=True, blank=True, related_name='demande_source')
+    date_execution = models.DateTimeField(null=True, blank=True)
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ['-date_demande']
+        verbose_name = 'Demande de décaissement'
+        verbose_name_plural = 'Demandes de décaissement'
+
+    def __str__(self):
+        return f"Décaissement #{self.id} — {self.montant} FC ({self.get_statut_display()})"
+
+    @property
+    def est_en_attente(self):
+        return self.statut == self.EN_ATTENTE
+
+    @property
+    def est_approuvee(self):
+        return self.statut == self.APPROUVEE
+
+    @property
+    def est_executee(self):
+        return self.statut == self.EXECUTEE
+
+    @property
+    def est_refusee(self):
+        return self.statut == self.REFUSEE
+
+    @property
+    def montant_final(self):
+        return self.montant_approuve if self.montant_approuve is not None else self.montant

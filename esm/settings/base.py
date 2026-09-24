@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'users_management.apps.UsersManagementConfig',
     'activity_logs.apps.ActivityLogsConfig',
+    'notifications.apps.NotificationsConfig',
+    'direction.apps.DirectionConfig',
     # Contrib
     'django.forms',
     'django_filters',

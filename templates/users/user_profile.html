@@ -23,7 +23,11 @@
                                 <div class="profile_img">
                                     <div id="crop-avatar">
                                         <!-- Current avatar -->
+                                        {% if user.photo %}
                                         <img class="img-responsive avatar-view" src="{{ user.photo.url }}" alt="{{ user.username }}">
+                                        {% else %}
+                                        <img class="img-responsive avatar-view" src="/static/img/user.png" alt="{{ user.username }}">
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>

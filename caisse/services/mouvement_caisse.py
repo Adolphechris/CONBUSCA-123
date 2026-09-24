@@ -220,6 +220,12 @@ class MouvementCaisseService:
         cls._assert_not_mirror(mouvement)
         cls._assert_caisse_ouverte(mouvement.caisse)
 
+        # Règle médico-légale : une sortie validée par la Direction est immuable
+        if hasattr(mouvement, 'demande_source') and mouvement.demande_source is not None:
+            raise ValidationError(
+                "Cette sortie de caisse est issue d'une demande de décaissement validée par la Direction et ne peut plus être modifiée."
+            )
+
         # Règle bloquante : les sorties ne peuvent excéder les entrées
         nouveau_montant = form.cleaned_data.get("montant", Decimal("0"))
         if mouvement.type_mouvement == "SORTIE" and nouveau_montant != mouvement.montant:
@@ -264,6 +270,12 @@ class MouvementCaisseService:
     def delete(cls, *, mouvement: MouvementCaisse, skip_rebuild: bool = False):
         cls._assert_not_mirror(mouvement)
         cls._assert_caisse_ouverte(mouvement.caisse)
+
+        # Règle médico-légale : une sortie validée par la Direction est immuable
+        if hasattr(mouvement, 'demande_source') and mouvement.demande_source is not None:
+            raise ValidationError(
+                "Cette sortie de caisse est issue d'une demande de décaissement validée par la Direction et ne peut pas être supprimée."
+            )
 
         date = mouvement.date_mouvement.date()
         impacts = [(mouvement.caisse, date)]

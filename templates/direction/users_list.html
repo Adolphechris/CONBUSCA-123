@@ -1,0 +1,138 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %} Comptes Utilisateurs — Direction {% endblock title %}
+
+{% block content %}
+<div class="right_col" role="main">
+  <div class="">
+    <div class="page-title">
+      <div class="title_left">
+        <h3><i class="fa fa-users text-navy"></i> Gestion des Comptes Utilisateurs</h3>
+      </div>
+      <div class="title_right text-right">
+        <a href="{% url 'direction_cockpit' %}" class="btn btn-default btn-sm">
+          <i class="fa fa-arrow-left"></i> Cockpit Direction
+        </a>
+      </div>
+    </div>
+    <div class="clearfix"></div>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade in" role="alert">
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+          {{ msg }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="row">
+      <div class="col-md-12">
+        <div class="x_panel">
+          <div class="x_title">
+            <h2>Liste des comptes utilisateurs du système</h2>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+            <div class="table-responsive">
+              <table id="tableUsers" class="table table-striped jambo_table bulk_action">
+                <thead>
+                  <tr class="headings">
+                    <th class="column-title">ID</th>
+                    <th class="column-title">Nom d'utilisateur</th>
+                    <th class="column-title">Nom & Prénom</th>
+                    <th class="column-title">Email</th>
+                    <th class="column-title">Profil</th>
+                    <th class="column-title text-center">Statut</th>
+                    <th class="column-title text-center">Actions Direction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for u in users %}
+                  <tr>
+                    <td>#{{ u.id }}</td>
+                    <td><strong>{{ u.username }}</strong></td>
+                    <td>{{ u.get_full_name|default:"—" }}</td>
+                    <td><small>{{ u.email|default:"—" }}</small></td>
+                    <td>
+                      {% if u.is_superuser %}
+                        <span class="label label-danger"><i class="fa fa-star"></i> Superadmin</span>
+                      {% elif u.type_profile %}
+                        <span class="label label-info">{{ u.type_profile.nom }}</span>
+                      {% else %}
+                        <span class="label label-default">Utilisateur</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if u.is_active %}
+                        <span class="label label-success">Actif</span>
+                      {% else %}
+                        <span class="label label-danger">Suspendu</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if not u.is_superuser or u == request.user %}
+                        {% if u.is_active %}
+                          <form method="post" action="{% url 'direction_user_toggle' u.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning btn-xs" onclick="return confirm('Suspendre l\'accès de cet utilisateur ?')">
+                              <i class="fa fa-pause"></i> Suspendre
+                            </button>
+                          </form>
+                        {% else %}
+                          <form method="post" action="{% url 'direction_user_toggle' u.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success btn-xs">
+                              <i class="fa fa-play"></i> Réactiver
+                            </button>
+                          </form>
+                        {% endif %}
+
+                        <button type="button" class="btn btn-danger btn-xs" data-toggle="modal" data-target="#modalReset{{ u.pk }}">
+                          <i class="fa fa-key"></i> Réinitialiser MDP
+                        </button>
+
+                        {# ── Modal Reset MDP ── #}
+                        <div class="modal fade" id="modalReset{{ u.pk }}" tabindex="-1" role="dialog">
+                          <div class="modal-dialog">
+                            <div class="modal-content text-left">
+                              <form method="post" action="{% url 'direction_user_reset_password' u.pk %}">
+                                {% csrf_token %}
+                                <div class="modal-header bg-danger text-white">
+                                  <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                  <h4 class="modal-title"><i class="fa fa-key"></i> Réinitialiser le mot de passe de {{ u.username }}</h4>
+                                </div>
+                                <div class="modal-body">
+                                  <div class="form-group">
+                                    <label>Nouveau mot de passe temporaire <span class="text-danger">*</span></label>
+                                    <input type="password" name="nouveau_password" class="form-control" required placeholder="Mot de passe temporaire...">
+                                    <small class="text-muted">L'utilisateur sera forcé de le modifier dès sa première connexion.</small>
+                                  </div>
+                                </div>
+                                <div class="modal-footer">
+                                  <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+                                  <button type="submit" class="btn btn-danger"><i class="fa fa-check"></i> Enregistrer</button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock content %}

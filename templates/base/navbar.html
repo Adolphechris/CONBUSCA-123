@@ -6,24 +6,40 @@
         </div>
 
         <ul class="nav navbar-nav navbar-right">
+            {% if user.is_authenticated %}
             <li class="">
-                {% if user.is_authenticated %}
                 <a href="javascript:;" class="user-profile dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
                     {% if user.photo %}
                     <img src="{{ user.photo.url }}" alt="">
                     {% else %}
-                    <img src="{% static 'images/user.png' %}" alt="">
+                    <img src="{% static 'img/user.png' %}" alt="">
                     {% endif %}
                     {{ user.username }}
                     <span class=" fa fa-angle-down"></span>
                 </a>
                 <ul class="dropdown-menu dropdown-usermenu pull-right" role="menu">
+                    {% if user.is_superuser %}
+                    <li><a href="{% url 'direction_cockpit' %}"><i class="fa fa-dashboard pull-right"></i> Cockpit Direction </a></li>
+                    {% endif %}
+                    <li><a href="{% url 'user_profile' %}"><i class="fa fa-user pull-right"></i> Mon Profil </a></li>
+                    <li><a href="{% url 'notifications_list' %}"><i class="fa fa-bell pull-right"></i> Notifications </a></li>
                     <li><a href="{% url 'login' %}"><i class="fa fa-sign-out pull-right"></i> Se Déconnecter </a></li>
                 </ul>
-                {% else %}
-                    <a href="{% url 'login' %}">Se Connecter</a>
-                {% endif %}
             </li>
+
+            <!-- Cloche Notifications In-App dynamique HTMX -->
+            <div id="navbarNotifContainer" hx-get="{% url 'notifications_badge' %}" hx-trigger="load, every 30s" hx-swap="outerHTML">
+                <li role="presentation" class="dropdown">
+                    <a href="{% url 'notifications_list' %}" class="dropdown-toggle info-number" title="Notifications">
+                        <i class="fa fa-bell-o" style="font-size: 18px;"></i>
+                    </a>
+                </li>
+            </div>
+            {% else %}
+            <li>
+                <a href="{% url 'login' %}">Se Connecter</a>
+            </li>
+            {% endif %}
         </ul>
     </nav>
 </div>

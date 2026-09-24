@@ -1,0 +1,446 @@
+{% extends "base/base.html" %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %} Cockpit Direction {% endblock title %}
+
+{% block stylesheets %}
+{{ block.super }}
+<style>
+    /* Stat Cards Gentelella */
+    .stat-card {
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 20px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      color: #ffffff !important;
+    }
+    .stat-card-orange {
+      background: linear-gradient(135deg, #f12711 0%, #f5af19 100%);
+      box-shadow: 0 6px 15px rgba(245, 175, 25, 0.3);
+    }
+    .stat-card-red {
+      background: linear-gradient(135deg, #eb3b5a 0%, #fa8231 100%);
+      box-shadow: 0 6px 15px rgba(235, 59, 90, 0.3);
+    }
+    .stat-card-green {
+      background: linear-gradient(135deg, #20bf6b 0%, #0fb9b1 100%);
+      box-shadow: 0 6px 15px rgba(32, 191, 107, 0.3);
+    }
+    .stat-card-blue {
+      background: linear-gradient(135deg, #3867d6 0%, #4b7bec 100%);
+      box-shadow: 0 6px 15px rgba(56, 103, 214, 0.3);
+    }
+    .stat-card:hover {
+      transform: translateY(-4px);
+    }
+    .stat-icon {
+      float: left;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .stat-content {
+      overflow: hidden;
+      padding-left: 12px;
+    }
+    .stat-number {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.1;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.95);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    /* Standard X_Panel overrides for direction */
+    .x_panel {
+      background: #ffffff;
+      border: 1px solid #e6e9ed;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .x_title h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2A3F54;
+      margin: 3px 0;
+    }
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="right_col" role="main">
+  <div class="">
+    {# ── Title bar ── #}
+    <div class="page-title">
+      <div class="title_left">
+        <h3><i class="fa fa-tachometer text-navy"></i> Cockpit Direction General</h3>
+      </div>
+      <div class="title_right text-right">
+        <a href="{% url 'direction_users' %}" class="btn btn-primary btn-sm">
+          <i class="fa fa-users"></i> Comptes utilisateurs
+        </a>
+        <a href="{% url 'direction_logs' %}" class="btn btn-default btn-sm">
+          <i class="fa fa-history"></i> Journal d'activités
+        </a>
+      </div>
+    </div>
+    <div class="clearfix"></div>
+
+    {# ── Flash Messages ── #}
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade in" role="alert">
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+          {{ msg }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {# ── Ligne 1 : KPIs Direction ── #}
+    <div class="row">
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card stat-card-orange">
+          <div class="stat-icon"><i class="fa fa-file-text-o"></i></div>
+          <div class="stat-content">
+            <div class="stat-number">{{ nb_commandes_attente }}</div>
+            <div class="stat-label">Commandes à valider</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card stat-card-red">
+          <div class="stat-icon"><i class="fa fa-money"></i></div>
+          <div class="stat-content">
+            <div class="stat-number">{{ nb_decaissements_attente }}</div>
+            <div class="stat-label">Décaissements à valider</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card stat-card-green">
+          <div class="stat-icon"><i class="fa fa-bank"></i></div>
+          <div class="stat-content">
+            <div class="stat-number">{{ caisses_ouvertes|length }}</div>
+            <div class="stat-label">Caisses ouvertes</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card stat-card-blue">
+          <div class="stat-icon"><i class="fa fa-bell"></i></div>
+          <div class="stat-content">
+            <div class="stat-number">{{ notifs_non_lues|length }}</div>
+            <div class="stat-label">Notifications non lues</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Ligne 2 : Commandes en attente ── #}
+    <div class="row">
+      <div class="col-md-12">
+        <div class="x_panel">
+          <div class="x_title">
+            <h2><i class="fa fa-clock-o text-warning"></i> Propositions de commande en attente d'arbitrage
+              {% if nb_commandes_attente %}
+                <span class="label label-warning">{{ nb_commandes_attente }} en attente</span>
+              {% endif %}
+            </h2>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+            {% if commandes_attente %}
+              <div class="table-responsive">
+                <table class="table table-striped jambo_table bulk_action">
+                  <thead>
+                    <tr class="headings">
+                      <th class="column-title">N° Commande</th>
+                      <th class="column-title">Date</th>
+                      <th class="column-title">Émetteur</th>
+                      <th class="column-title">Fournisseur</th>
+                      <th class="column-title text-right">Total (FC)</th>
+                      <th class="column-title text-center">Actions Direction</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for c in commandes_attente %}
+                    <tr>
+                      <td>
+                        <a href="{% url 'commande_details' c.pk %}" style="font-weight:bold; font-family:monospace;">
+                          #{{ c.numero }}
+                        </a>
+                      </td>
+                      <td>{{ c.date_commande|date:"d/m/Y" }}</td>
+                      <td><small>{{ c.cree_par.get_full_name|default:c.cree_par.username }}</small></td>
+                      <td>{{ c.fournisseur|default:"Multi-fournisseurs" }}</td>
+                      <td class="text-right fw-bold text-success">{{ c.total_commande|floatformat:0 }} FC</td>
+                      <td class="text-center">
+                        <a href="{% url 'commande_details' c.pk %}" class="btn btn-primary btn-xs">
+                          <i class="fa fa-eye"></i> Examiner
+                        </a>
+                        <button type="button" class="btn btn-success btn-xs"
+                                data-toggle="modal" data-target="#modalValiderCmd{{ c.pk }}">
+                          <i class="fa fa-check"></i> Valider
+                        </button>
+                        <button type="button" class="btn btn-danger btn-xs"
+                                data-toggle="modal" data-target="#modalRefuserCmd{{ c.pk }}">
+                          <i class="fa fa-times"></i> Refuser
+                        </button>
+
+                        {# ── Modal Valider Commande ── #}
+                        <div class="modal fade" id="modalValiderCmd{{ c.pk }}" tabindex="-1" role="dialog">
+                          <div class="modal-dialog">
+                            <div class="modal-content text-left">
+                              <form method="post" action="{% url 'direction_commande_valider' c.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{% url 'direction_cockpit' %}">
+                                <div class="modal-header bg-success text-white">
+                                  <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                  <h4 class="modal-title"><i class="fa fa-check-circle"></i> Valider la commande #{{ c.numero }}</h4>
+                                </div>
+                                <div class="modal-body">
+                                  <p>Montant total : <strong>{{ c.total_commande|floatformat:0 }} FC</strong></p>
+                                  <div class="form-group">
+                                    <label>Commentaire / Note de la Direction (optionnel)</label>
+                                    <textarea name="commentaire" class="form-control" rows="3" placeholder="Approuvé en réunion de direction..."></textarea>
+                                  </div>
+                                </div>
+                                <div class="modal-footer">
+                                  <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+                                  <button type="submit" class="btn btn-success"><i class="fa fa-check"></i> Confirmer la validation</button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+
+                        {# ── Modal Refuser Commande ── #}
+                        <div class="modal fade" id="modalRefuserCmd{{ c.pk }}" tabindex="-1" role="dialog">
+                          <div class="modal-dialog">
+                            <div class="modal-content text-left">
+                              <form method="post" action="{% url 'direction_commande_refuser' c.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{% url 'direction_cockpit' %}">
+                                <div class="modal-header bg-danger text-white">
+                                  <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                  <h4 class="modal-title"><i class="fa fa-times-circle"></i> Refuser la commande #{{ c.numero }}</h4>
+                                </div>
+                                <div class="modal-body">
+                                  <div class="form-group">
+                                    <label>Motif obligatoire du refus <span class="text-danger">*</span></label>
+                                    <textarea name="motif_refus" class="form-control" rows="3" required placeholder="Motif du refus..."></textarea>
+                                  </div>
+                                </div>
+                                <div class="modal-footer">
+                                  <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+                                  <button type="submit" class="btn btn-danger"><i class="fa fa-times"></i> Confirmer le refus</button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="text-center text-muted py-4" style="padding: 25px;">
+                <i class="fa fa-check-circle fa-2x text-success" style="display:block; margin-bottom:10px;"></i>
+                Aucune commande en attente d'arbitrage pour le moment.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Ligne 3 : Décaissements en attente ── #}
+    <div class="row">
+      <div class="col-md-12">
+        <div class="x_panel">
+          <div class="x_title">
+            <h2><i class="fa fa-money text-danger"></i> Demandes de décaissement de caisse à autoriser
+              {% if nb_decaissements_attente %}
+                <span class="label label-danger">{{ nb_decaissements_attente }} en attente</span>
+              {% endif %}
+            </h2>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+            {% if decaissements_attente %}
+              <div class="table-responsive">
+                <table class="table table-striped jambo_table bulk_action">
+                  <thead>
+                    <tr class="headings">
+                      <th class="column-title">N° Demande</th>
+                      <th class="column-title">Caisse</th>
+                      <th class="column-title">Caissier</th>
+                      <th class="column-title">Date</th>
+                      <th class="column-title">Rubrique</th>
+                      <th class="column-title">Motif</th>
+                      <th class="column-title text-right">Montant demandé</th>
+                      <th class="column-title text-center">Actions Direction</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for d in decaissements_attente %}
+                    <tr>
+                      <td><span style="font-family:monospace; font-weight:bold;">#DEC-{{ d.pk }}</span></td>
+                      <td>{{ d.caisse.caisse.nom }}</td>
+                      <td><small>{{ d.demandeur.get_full_name|default:d.demandeur.username }}</small></td>
+                      <td>{{ d.date_demande|date:"d/m/Y H:i" }}</td>
+                      <td>{{ d.rubrique.nom }}</td>
+                      <td>{{ d.motif }}</td>
+                      <td class="text-right fw-bold text-danger fs-6">{{ d.montant|floatformat:0 }} FC</td>
+                      <td class="text-center">
+                        <button type="button" class="btn btn-success btn-xs"
+                                data-toggle="modal" data-target="#modalApprouverDec{{ d.pk }}">
+                          <i class="fa fa-check"></i> Approuver
+                        </button>
+                        <button type="button" class="btn btn-danger btn-xs"
+                                data-toggle="modal" data-target="#modalRefuserDec{{ d.pk }}">
+                          <i class="fa fa-times"></i> Refuser
+                        </button>
+
+                        {# ── Modal Approuver Décaissement ── #}
+                        <div class="modal fade" id="modalApprouverDec{{ d.pk }}" tabindex="-1" role="dialog">
+                          <div class="modal-dialog">
+                            <div class="modal-content text-left">
+                              <form method="post" action="{% url 'direction_decaissement_approuver' d.pk %}">
+                                {% csrf_token %}
+                                <div class="modal-header bg-success text-white">
+                                  <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                  <h4 class="modal-title"><i class="fa fa-check-circle"></i> Approuver le décaissement #DEC-{{ d.pk }}</h4>
+                                </div>
+                                <div class="modal-body">
+                                  <p>Caisse : <strong>{{ d.caisse.caisse.nom }}</strong> | Motif : <em>{{ d.motif }}</em></p>
+                                  <div class="form-group">
+                                    <label>Montant à approuver (FC) <span class="text-danger">*</span></label>
+                                    <input type="number" name="montant_approuve" class="form-control" value="{{ d.montant|floatformat:0 }}" required>
+                                    <small class="text-muted">Vous pouvez ajuster le montant si la Direction n'accorde qu'une partie.</small>
+                                  </div>
+                                  <div class="form-group">
+                                    <label>Commentaire de la Direction (optionnel)</label>
+                                    <textarea name="commentaire" class="form-control" rows="2" placeholder="Instructions ou remarques..."></textarea>
+                                  </div>
+                                </div>
+                                <div class="modal-footer">
+                                  <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+                                  <button type="submit" class="btn btn-success"><i class="fa fa-check"></i> Autoriser la sortie</button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+
+                        {# ── Modal Refuser Décaissement ── #}
+                        <div class="modal fade" id="modalRefuserDec{{ d.pk }}" tabindex="-1" role="dialog">
+                          <div class="modal-dialog">
+                            <div class="modal-content text-left">
+                              <form method="post" action="{% url 'direction_decaissement_refuser' d.pk %}">
+                                {% csrf_token %}
+                                <div class="modal-header bg-danger text-white">
+                                  <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                  <h4 class="modal-title"><i class="fa fa-times-circle"></i> Refuser le décaissement #DEC-{{ d.pk }}</h4>
+                                </div>
+                                <div class="modal-body">
+                                  <div class="form-group">
+                                    <label>Motif du refus <span class="text-danger">*</span></label>
+                                    <textarea name="motif_refus" class="form-control" rows="3" required placeholder="Explication du refus..."></textarea>
+                                  </div>
+                                </div>
+                                <div class="modal-footer">
+                                  <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+                                  <button type="submit" class="btn btn-danger"><i class="fa fa-times"></i> Confirmer le refus</button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="text-center text-muted py-4" style="padding: 25px;">
+                <i class="fa fa-check-circle fa-2x text-success" style="display:block; margin-bottom:10px;"></i>
+                Aucune demande de décaissement en attente.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Ligne 4 : Caisses Ouvertes & Trésorerie ── #}
+    <div class="row">
+      <div class="col-md-12">
+        <div class="x_panel">
+          <div class="x_title">
+            <h2><i class="fa fa-bank text-info"></i> Suivi des Caisses Ouvertes en Temps Réel</h2>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+            {% if caisses_ouvertes %}
+              <div class="table-responsive">
+                <table class="table table-striped jambo_table bulk_action">
+                  <thead>
+                    <tr class="headings">
+                      <th class="column-title">Caisse</th>
+                      <th class="column-title">Ouverte par</th>
+                      <th class="column-title text-right">Solde initial</th>
+                      <th class="column-title text-center">Date ouverture</th>
+                      <th class="column-title text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for cc in caisses_ouvertes %}
+                    <tr>
+                      <td><strong>{{ cc.caisse.nom }}</strong></td>
+                      <td><small>{{ cc.ouvert_par.username|default:"—" }}</small></td>
+                      <td class="text-right fw-bold text-success">{{ cc.solde_initial|floatformat:0 }} FC</td>
+                      <td class="text-center"><small class="text-muted">{{ cc.date_ouverture|date:"d/m/Y H:i" }}</small></td>
+                      <td class="text-center">
+                        <a href="{% url 'caisse_details' cc.pk %}" class="btn btn-primary btn-xs">
+                          <i class="fa fa-eye"></i> Consulter la caisse
+                        </a>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="text-center text-muted py-4" style="padding: 25px;">
+                Aucune caisse actuellement ouverte.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock content %}

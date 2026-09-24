@@ -47,6 +47,8 @@ urlpatterns = [
     path('users/', include('users_management.urls')),
     path('parametres/', include('parametres.urls')),
     path('logs/', include('activity_logs.urls')),
+    path('notifications/', include('notifications.urls')),
+    path('direction/', include('direction.urls')),
     path('ecommerce/', include('ecommerce.urls')),
     path('api/', include('api.urls')),
     path("select2/", include("django_select2.urls")),

@@ -13,8 +13,8 @@ from decimal import Decimal
 @dataclass(frozen=True)
 class CommandeCreateInput:
     date_commande: date
-    fournisseur_id: int
-    taux: Decimal
+    fournisseur_id: int | None = None
+    taux: Decimal = Decimal('1.0000')
     devise_id: int | None = None
 
 
@@ -37,6 +37,6 @@ class ArticleCommandeUpdateInput:
 class CommandeUpdateInput:
     commande_id: int
     date_commande: date
-    fournisseur_id: int
-    taux: Decimal
+    fournisseur_id: int | None = None
+    taux: Decimal = Decimal('1.0000')
     devise_id: int | None = None

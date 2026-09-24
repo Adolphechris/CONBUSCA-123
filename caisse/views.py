@@ -2,6 +2,7 @@ import datetime
 import logging
 from decimal import Decimal
 
+from django.views import View
 from django.views.generic import ListView, DetailView, FormView, DeleteView
 from django.shortcuts import redirect, get_object_or_404, render, HttpResponse
 from django.views.decorators.http import require_GET
@@ -399,6 +400,14 @@ class CaisseView(CaisseAccessMixin, DetailView):
         total_entrees = self.total_entrees()
         total_sorties = self.total_sorties()
 
+        from .models import DemandeDecaissement
+        nb_approuves = DemandeDecaissement.objects.filter(
+            caisse=self.object, statut=DemandeDecaissement.APPROUVEE
+        ).count()
+        nb_attente = DemandeDecaissement.objects.filter(
+            caisse=self.object, statut=DemandeDecaissement.EN_ATTENTE
+        ).count()
+
         ctx.update({
             "caisse": self.object.caisse,
             "mouvements_entree": self.mouvements("ENTREE"),
@@ -407,6 +416,8 @@ class CaisseView(CaisseAccessMixin, DetailView):
             "total_entrees": total_entrees,
             "total_sorties": total_sorties,
             "solde_caisse": total_entrees - total_sorties,
+            "nb_decaissements_approuves": nb_approuves,
+            "nb_decaissements_en_attente": nb_attente,
         })
         return ctx
 
@@ -577,3 +588,229 @@ class HistoriqueCaisseView(RoleRequiredMixin, DetailView):
         context['caisse'] = self.object
         context['liste_caisses'] = self.get_liste_caisses_courantes()
         return context
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CIRCUIT DÉCAISSEMENT — Vues Caissier
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DemandeDecaissementCreateView(CaisseAccessMixin, View):
+    """
+    Le caissier soumet une demande de décaissement.
+    RÈGLE MÉDICO-LÉGALE : aucun MouvementCaisse n'est créé ici.
+    La demande part directement au statut EN_ATTENTE pour validation Direction.
+    """
+    template_name = 'caisse/decaissement_form.html'
+
+    def get_caisse(self):
+        return get_object_or_404(CaisseCourante, pk=self.kwargs['pk'])
+
+    def get(self, request, pk):
+        from .forms import DemandeDecaissementForm
+        caisse_courante = self.get_caisse()
+        form = DemandeDecaissementForm(caisse_pk=caisse_courante.pk)
+        return render(request, self.template_name, {
+            'form': form,
+            'caisse_courante': caisse_courante,
+            'title': 'Nouvelle demande de décaissement',
+        })
+
+    def post(self, request, pk):
+        from .forms import DemandeDecaissementForm
+        from notifications.models import NotificationInterne
+        from django.db import transaction
+
+        caisse_courante = self.get_caisse()
+        assert_caisse_write_access(request.user, caisse_courante.caisse)
+
+        form = DemandeDecaissementForm(request.POST, caisse_pk=caisse_courante.pk)
+        if not form.is_valid():
+            return render(request, self.template_name, {
+                'form': form,
+                'caisse_courante': caisse_courante,
+                'title': 'Nouvelle demande de décaissement',
+            })
+
+        with transaction.atomic():
+            from .models import DemandeDecaissement
+            demande = DemandeDecaissement.objects.create(
+                caisse=caisse_courante,
+                demandeur=request.user,
+                montant=form.cleaned_data['montant'],
+                rubrique=form.cleaned_data['rubrique'],
+                sous_rubrique=form.cleaned_data.get('sous_rubrique'),
+                motif=form.cleaned_data['motif'],
+                reference=form.cleaned_data.get('reference') or '',
+                fournisseur=form.cleaned_data.get('fournisseur'),
+                client=form.cleaned_data.get('client'),
+                creancier=form.cleaned_data.get('creancier'),
+                agent=form.cleaned_data.get('agent'),
+                statut=DemandeDecaissement.EN_ATTENTE,
+            )
+            # Notification superadmins
+            NotificationInterne.notifier_superadmins(
+                titre=f"Demande de décaissement #{demande.pk} — {demande.montant:,.0f} FC",
+                message=(
+                    f"{request.user.username} demande un décaissement de {demande.montant:,.0f} FC "
+                    f"sur la caisse « {caisse_courante.caisse.nom} ».\n"
+                    f"Rubrique : {demande.rubrique.nom}\n"
+                    f"Motif : {demande.motif}"
+                ),
+                type_notification=NotificationInterne.INFO,
+                emetteur=request.user,
+                lien=reverse('direction_cockpit'),
+            )
+
+        from django.contrib import messages as dj_messages
+        dj_messages.success(
+            request,
+            f"Demande de décaissement #{demande.pk} soumise à la Direction. Vous serez notifié dès qu'une décision sera prise."
+        )
+        return redirect('caisse_details', pk=caisse_courante.pk)
+
+
+class DemandeDecaissementExecuterView(CaisseAccessMixin, View):
+    """
+    Le caissier exécute physiquement un décaissement APPROUVÉ.
+    C'est ICI et SEULEMENT ICI qu'un MouvementCaisse de type SORTIE est créé.
+    RÈGLE MÉDICO-LÉGALE ABSOLUE : vérifier statut == APPROUVEE avant tout.
+    """
+    def get_caisse(self):
+        demande = get_object_or_404(
+            __import__('caisse.models', fromlist=['DemandeDecaissement']).DemandeDecaissement,
+            pk=self.kwargs['pk']
+        )
+        return demande.caisse.caisse
+
+    def post(self, request, pk):
+        from .models import DemandeDecaissement
+        from notifications.models import NotificationInterne
+        from django.db import transaction
+
+        demande = get_object_or_404(DemandeDecaissement, pk=pk)
+        caisse_courante = demande.caisse
+        assert_caisse_write_access(request.user, caisse_courante.caisse)
+
+        # ── Vérifications médico-légales ──
+        if demande.statut != DemandeDecaissement.APPROUVEE:
+            from django.contrib import messages as dj_messages
+            dj_messages.error(
+                request,
+                "Cette demande n'est pas approuvée par la Direction. Vous ne pouvez pas l'exécuter."
+            )
+            return redirect('caisse_details', pk=caisse_courante.pk)
+
+        if not caisse_courante.est_ouverte:
+            from django.contrib import messages as dj_messages
+            dj_messages.error(request, "La caisse est fermée.")
+            return redirect('caisse_details', pk=caisse_courante.pk)
+
+        montant_final = demande.montant_final
+
+        # ── Création atomique du MouvementCaisse ──
+        with transaction.atomic():
+            # Construire un CaisseForm synthétique pour passer par MouvementCaisseService
+            class _FakeForm:
+                """Adaptateur minimal pour MouvementCaisseService.create()"""
+                def __init__(self, demande, montant):
+                    self.cleaned_data = {
+                        'type_mouvement': 'SORTIE',
+                        'montant': montant,
+                        'rubrique': demande.rubrique,
+                        'sous_rubrique': demande.sous_rubrique,
+                        'motif': f"Décaissement #{demande.pk} — {demande.motif}",
+                        'reference': demande.reference or '',
+                        'devise': None,
+                        'taux': None,
+                        'caisse_destination': None,
+                    }
+
+            fake_form = _FakeForm(demande, montant_final)
+            try:
+                mouvement = MouvementCaisseService.create(
+                    form=fake_form,
+                    caisse_courante=caisse_courante,
+                    user=request.user,
+                    fournisseur_id=demande.fournisseur_id,
+                    client_id=demande.client_id,
+                    creancier_id=demande.creancier_id,
+                    debiteur_id=demande.debiteur_id,
+                    agent_id=demande.agent_id,
+                    sous_rubrique_id=demande.sous_rubrique_id,
+                    caisse_destination_id=None,
+                )
+            except ValidationError as e:
+                from django.contrib import messages as dj_messages
+                dj_messages.error(request, str(e))
+                return redirect('caisse_details', pk=caisse_courante.pk)
+
+            # Lier le mouvement à la demande et marquer EXECUTEE
+            from django.utils import timezone
+            demande.mouvement_caisse = mouvement
+            demande.statut = DemandeDecaissement.EXECUTEE
+            demande.date_execution = timezone.now()
+            demande.save(update_fields=['mouvement_caisse', 'statut', 'date_execution'])
+
+            # Notification au superadmin : exécution effectuée
+            NotificationInterne.notifier_superadmins(
+                titre=f"Décaissement #{demande.pk} exécuté — {montant_final:,.0f} FC",
+                message=(
+                    f"{request.user.username} a exécuté le décaissement approuvé #{demande.pk} "
+                    f"({montant_final:,.0f} FC) sur la caisse « {caisse_courante.caisse.nom} »."
+                ),
+                type_notification=NotificationInterne.INFO,
+                emetteur=request.user,
+                lien=reverse('direction_cockpit'),
+            )
+
+        from django.contrib import messages as dj_messages
+        dj_messages.success(
+            request,
+            f"Décaissement #{demande.pk} exécuté avec succès — {montant_final:,.0f} FC débité de la caisse."
+        )
+        return redirect('caisse_details', pk=caisse_courante.pk)
+
+
+class DemandesDecaissementListView(CaisseAccessMixin, View):
+    """
+    Liste les demandes de décaissement d'une caisse courante donnée.
+    Filtrée par caisse et accessible au caissier concerné ou admin.
+    """
+    template_name = 'caisse/decaissement_list.html'
+
+    def get_caisse(self):
+        return get_object_or_404(CaisseCourante, pk=self.kwargs['pk'])
+
+    def get(self, request, pk):
+        from .models import DemandeDecaissement
+        caisse_courante = self.get_caisse()
+        assert_caisse_write_access(request.user, caisse_courante.caisse)
+        demandes = (
+            DemandeDecaissement.objects
+            .filter(caisse=caisse_courante)
+            .select_related('demandeur', 'rubrique', 'valide_par', 'mouvement_caisse')
+            .order_by('-date_demande')
+        )
+        return render(request, self.template_name, {
+            'caisse_courante': caisse_courante,
+            'demandes': demandes,
+        })
+
+
+class DemandeDecaissementPdfView(CaisseAccessMixin, View):
+    """
+    Génère le Manifeste officiel de décaissement & Bon de sortie de caisse (PDF).
+    Disponible pour le caissier et la direction dès que la demande est approuvée ou exécutée.
+    """
+    def get_caisse(self):
+        demande = get_object_or_404(
+            __import__('caisse.models', fromlist=['DemandeDecaissement']).DemandeDecaissement,
+            pk=self.kwargs['pk']
+        )
+        return demande.caisse.caisse
+
+    def get(self, request, pk):
+        from .models import DemandeDecaissement
+        from .pdf import generer_manifeste_decaissement_pdf
+        demande = get_object_or_404(DemandeDecaissement, pk=pk)
+        return generer_manifeste_decaissement_pdf(demande=demande, request=request)

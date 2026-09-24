@@ -1,0 +1,190 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %} Analyse des Stocks & Réapprovisionnement {% endblock title %}
+
+{% block stylesheets %}
+{{ block.super }}
+<style>
+  .stat-card-suggest {
+    border-radius: 8px;
+    padding: 15px;
+    color: #fff;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .bg-rupture { background: linear-gradient(135deg, #eb3b5a 0%, #b71540 100%); }
+  .bg-critique { background: linear-gradient(135deg, #fa8231 0%, #e67e22 100%); }
+  .bg-alerte { background: linear-gradient(135deg, #20bf6b 0%, #26de81 100%); }
+  .bg-total { background: linear-gradient(135deg, #3867d6 0%, #45aaf2 100%); }
+  .suggest-val { font-size: 26px; font-weight: 800; }
+  .suggest-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; }
+
+  tr.urgence-rupture { background-color: #fce4e4 !important; }
+  tr.urgence-critique { background-color: #fff4e5 !important; }
+  tr.urgence-alerte { background-color: #eafaf1 !important; }
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="right_col" role="main">
+  <div class="">
+    <div class="page-title">
+      <div class="title_left">
+        <h3><i class="fa fa-bar-chart text-navy"></i> Analyse des Stocks — Proposition de Commande</h3>
+      </div>
+      <div class="title_right text-right">
+        <a href="{% url 'commandes' %}" class="btn btn-default btn-sm">
+          <i class="fa fa-arrow-left"></i> Retour aux commandes
+        </a>
+      </div>
+    </div>
+    <div class="clearfix"></div>
+
+    {# ── KPIs ── #}
+    <div class="row">
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card-suggest bg-rupture">
+          <div class="suggest-val">{{ nb_rupture }}</div>
+          <div class="suggest-lbl">Articles en rupture (0 stock)</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card-suggest bg-critique">
+          <div class="suggest-val">{{ nb_critique }}</div>
+          <div class="suggest-lbl">Articles critiques (≤ 5 jours)</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card-suggest bg-alerte">
+          <div class="suggest-val">{{ nb_alerte }}</div>
+          <div class="suggest-lbl">Articles sous le seuil d'alerte</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-sm-6">
+        <div class="stat-card-suggest bg-total">
+          <div class="suggest-val">{{ total_estime|floatformat:0 }} FC</div>
+          <div class="suggest-lbl">Budget total estimé</div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Information circuit ── #}
+    <div class="alert alert-info" role="alert" style="margin-bottom: 20px;">
+      <i class="fa fa-info-circle fa-lg"></i>
+      <strong>Circuit de validation Direction :</strong>
+      La commande générée automatiquement est soumise <strong>directement sous statut « EN ATTENTE »</strong> à la Direction Générale.
+      Elle ne déclenche aucun approvisionnement direct et doit suivre le cycle d'arbitrage.
+    </div>
+
+    {% if rows %}
+    <div class="row">
+      <div class="col-md-12">
+        <div class="x_panel">
+          <div class="x_title">
+            <h2><i class="fa fa-list"></i> Liste des {{ nb_articles }} articles nécessitant un réapprovisionnement</h2>
+            <div class="nav navbar-right">
+              <form method="post" action="{% url 'commande_generer_auto' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success btn-sm"
+                        onclick="return confirm('Générer et soumettre automatiquement cette commande à la Direction pour {{ nb_articles }} articles ({{ total_estime|floatformat:0 }} FC) ?')">
+                  <i class="fa fa-magic"></i> Générer et Soumettre à la Direction
+                </button>
+              </form>
+            </div>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+            <div class="table-responsive">
+              <table class="table table-striped jambo_table bulk_action">
+                <thead>
+                  <tr class="headings">
+                    <th class="column-title">Niveau Urgence</th>
+                    <th class="column-title">Article</th>
+                    <th class="column-title">Fournisseur hab.</th>
+                    <th class="column-title text-right">Stock actuel</th>
+                    <th class="column-title text-right">Seuil d'alerte</th>
+                    <th class="column-title text-right">Ventes (30j)</th>
+                    <th class="column-title text-right">Jours restants</th>
+                    <th class="column-title text-right">Qté suggérée</th>
+                    <th class="column-title text-right">P.U. Achat (FC)</th>
+                    <th class="column-title text-right">Total estimé</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in rows %}
+                  <tr class="urgence-{{ r.urgence }}">
+                    <td>
+                      {% if r.urgence == 'rupture' %}
+                        <span class="label label-danger"><i class="fa fa-exclamation-circle"></i> RUPTURE</span>
+                      {% elif r.urgence == 'critique' %}
+                        <span class="label label-warning" style="background:#e67e22;"><i class="fa fa-exclamation-triangle"></i> CRITIQUE</span>
+                      {% else %}
+                        <span class="label label-info"><i class="fa fa-warning"></i> ALERTE</span>
+                      {% endif %}
+                    </td>
+                    <td><strong>{{ r.designation }}</strong></td>
+                    <td><small class="text-muted">{{ r.fournisseur }}</small></td>
+                    <td class="text-right {% if r.stock_actuel == 0 %}text-danger fw-bold{% endif %}">{{ r.stock_actuel }} {{ r.unite }}</td>
+                    <td class="text-right">{{ r.seuil }}</td>
+                    <td class="text-right">{{ r.ecoul_30j }}</td>
+                    <td class="text-right">
+                      {% if r.jours_restants is not None %}
+                        {% if r.jours_restants <= 0 %}
+                          <span class="label label-danger">Épuisé</span>
+                        {% elif r.jours_restants <= 5 %}
+                          <span class="label label-warning" style="background:#e67e22;">{{ r.jours_restants }} jours</span>
+                        {% else %}
+                          {{ r.jours_restants }} jours
+                        {% endif %}
+                      {% else %}—{% endif %}
+                    </td>
+                    <td class="text-right fw-bold">{{ r.qte_suggere }}</td>
+                    <td class="text-right">{{ r.prix_achat|floatformat:0 }}</td>
+                    <td class="text-right fw-bold text-success">{{ r.total_estime|floatformat:0 }} FC</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot>
+                  <tr class="headings" style="background:#2A3F54; color:#fff;">
+                    <td colspan="9" class="text-right"><strong>BUDGET TOTAL ESTIMÉ</strong></td>
+                    <td class="text-right"><strong>{{ total_estime|floatformat:0 }} FC</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div class="text-right style-actions" style="margin-top:20px;">
+              <form method="post" action="{% url 'commande_generer_auto' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success btn-lg"
+                        onclick="return confirm('Confirmer la génération de la commande pour {{ total_estime|floatformat:0 }} FC ?')">
+                  <i class="fa fa-magic"></i> Générer et Soumettre à la Direction ({{ total_estime|floatformat:0 }} FC)
+                </button>
+              </form>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="row">
+      <div class="col-md-12">
+        <div class="x_panel">
+          <div class="x_content text-center py-5" style="padding:40px;">
+            <i class="fa fa-check-circle fa-4x text-success" style="display:block; margin-bottom:15px;"></i>
+            <h3 class="text-success">Tous les stocks sont optimaux !</h3>
+            <p class="text-muted">Aucun article ne nécessite de réapprovisionnement pour le moment.</p>
+            <a href="{% url 'commandes' %}" class="btn btn-default">
+              <i class="fa fa-arrow-left"></i> Retour aux commandes
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock content %}

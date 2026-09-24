@@ -4,12 +4,16 @@ from django.urls import reverse
 
 class Commande(models.Model):
     BROUILLON = 'BROUILLON'
+    EN_ATTENTE = 'EN_ATTENTE'
     VALIDEE = 'VALIDEE'
+    REFUSEE = 'REFUSEE'
     TRANSFORMEE = 'TRANSFORMEE'
     
     STATUT_CHOICES = [
         (BROUILLON, 'Brouillon'),
+        (EN_ATTENTE, 'En attente de validation'),
         (VALIDEE, 'Validée'),
+        (REFUSEE, 'Refusée'),
         (TRANSFORMEE, 'Transformée'),
     ]
     
@@ -18,7 +22,9 @@ class Commande(models.Model):
     fournisseur = models.ForeignKey(
         'fournisseurs.Fournisseur',
         on_delete=models.PROTECT,
-        null=False,
+        null=True,
+        blank=True,
+        help_text="Fournisseur principal ou vide si commande multi-fournisseurs",
     )
     devise = models.ForeignKey(
         'parametres.Devise',
@@ -29,13 +35,26 @@ class Commande(models.Model):
     )
     taux = models.DecimalField(default=0, max_digits=12, decimal_places=4)
     statut = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=STATUT_CHOICES,
         default=BROUILLON,
         verbose_name='Statut'
     )
     date_creation = models.DateTimeField(auto_now_add=True)
     date_modification = models.DateTimeField(auto_now=True)
+    date_validation = models.DateTimeField(null=True, blank=True)
+    valide_par = models.ForeignKey(
+        'users.CustomUser',
+        related_name='commandes_validees',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    commentaire_decision = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Motif de refus ou observation de la Direction",
+    )
     cree_par = models.ForeignKey(
         'users.CustomUser',
         related_name='commandecreepar',
@@ -62,6 +81,11 @@ class Commande(models.Model):
 
     def get_absolute_url(self) -> str:
         return reverse('commande_details', args=[self.pk])
+
+    @property
+    def est_modifiable(self) -> bool:
+        """Une commande validée ou refusée par la Direction ne peut plus être modifiée par l'utilisateur."""
+        return self.statut in (self.BROUILLON, self.EN_ATTENTE)
 
 
 class DetailsCommande(models.Model):

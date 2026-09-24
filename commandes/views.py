@@ -15,7 +15,12 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, ListView, TemplateView
 
-from users.permissions import ROLE_ADMIN, RoleRequiredMixin
+from users.permissions import (
+    ROLE_ADMIN,
+    ROLE_GERANT_STOCK,
+    ROLE_GERANT_MAGASIN,
+    RoleRequiredMixin,
+)
 
 from .exceptions import CommandeDejaClotureError
 from .forms import ArticleCommandeAddForm, ArticleCommandeUpdateForm, CommandeCreateForm
@@ -26,6 +31,7 @@ from .inputs import (
     CommandeUpdateInput,
 )
 from .models import Commande, DetailsCommande
+from .pdf import generer_bon_commande_pdf
 from .selectors import (
     liste_commandes,
     liste_details_commande,
@@ -34,13 +40,16 @@ from .selectors import (
 from .services import (
     ajouter_article_commande,
     annuler_commande,
+    calculer_besoins_reapprovisionnement,
     cloturer_commande,
     creer_commande,
+    generer_commande_automatique,
     modifier_article_commande,
     modifier_commande,
+    refuser_commande,
+    soumettre_commande,
     supprimer_article_commande,
     valider_commande,
-    transformer_commande,
 )
 
 
@@ -51,7 +60,7 @@ def is_htmx(request) -> bool:
 # ── List ──────────────────────────────────────────────────────────────────────
 
 class CommandesView(RoleRequiredMixin, ListView):
-    allowed_roles = [ROLE_ADMIN]
+    allowed_roles = [ROLE_ADMIN, ROLE_GERANT_STOCK, ROLE_GERANT_MAGASIN]
     context_object_name = 'liste_commandes'
     template_name = 'commandes/commandes.html'
 
@@ -62,7 +71,7 @@ class CommandesView(RoleRequiredMixin, ListView):
 # ── Create ────────────────────────────────────────────────────────────────────
 
 class CommandeCreateView(RoleRequiredMixin, View):
-    allowed_roles = [ROLE_ADMIN]
+    allowed_roles = [ROLE_ADMIN, ROLE_GERANT_STOCK, ROLE_GERANT_MAGASIN]
     template_name = 'commandes/commande_form.html'
 
     def _context(self, form):
@@ -81,9 +90,10 @@ class CommandeCreateView(RoleRequiredMixin, View):
         if not form.is_valid():
             return render(request, self.template_name, self._context(form))
         devise = form.cleaned_data.get('devise')
+        fournisseur = form.cleaned_data.get('fournisseur')
         data = CommandeCreateInput(
             date_commande=form.cleaned_data['date_commande'],
-            fournisseur_id=form.cleaned_data['fournisseur'].pk,
+            fournisseur_id=fournisseur.pk if fournisseur else None,
             taux=form.cleaned_data['taux'],
             devise_id=devise.pk if devise else None,
         )
@@ -338,31 +348,16 @@ class ArticleCommandeDeleteView(RoleRequiredMixin, View):
         return redirect('commande_details', pk=commande.pk)
 
 
-# ── Workflow: Validation ──────────────────────────────────────────────────────
+# ── Workflow: Soumission à la Direction ───────────────────────────────────────
 
-class CommandeValiderView(RoleRequiredMixin, TemplateView):
-    allowed_roles = [ROLE_ADMIN]
-    template_name = 'commandes/commande_confirm_valider.html'
+class CommandeSoumettreView(RoleRequiredMixin, View):
+    allowed_roles = [ROLE_ADMIN, ROLE_GERANT_STOCK, ROLE_GERANT_MAGASIN]
 
-    def _get_commande(self):
-        return get_object_or_404(Commande, pk=self.kwargs['pk'])
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        commande = self._get_commande()
-        context['title'] = 'Valider la commande'
-        context['message'] = f'Voulez-vous valider la commande {commande.numero} ?'
-        context['submit_icon'] = 'fa fa-check'
-        context['submit_label'] = 'Valider'
-        context['commande'] = commande
-        return context
-
-    def post(self, request, *args, **kwargs):
-        commande = self._get_commande()
+    def post(self, request, pk):
+        commande = get_object_or_404(Commande, pk=pk)
         try:
-            valider_commande(commande_id=commande.pk, current_user=request.user)
+            soumettre_commande(commande_id=commande.pk, current_user=request.user)
         except Exception as e:
-            # Gérer l'erreur (à améliorer avec messages)
             pass
         if is_htmx(request):
             response = HttpResponse()
@@ -371,77 +366,108 @@ class CommandeValiderView(RoleRequiredMixin, TemplateView):
         return redirect('commande_details', pk=commande.pk)
 
 
-# ── Workflow: Transformation en approvisionnement ────────────────────────────
+# ── Workflow: Validation par la Direction ──────────────────────────────────────
 
-class CommandeTransformerView(RoleRequiredMixin, TemplateView):
+class CommandeValiderView(RoleRequiredMixin, View):
     allowed_roles = [ROLE_ADMIN]
-    template_name = 'commandes/commande_confirm_transformer.html'
 
-    def _get_commande(self):
-        return get_object_or_404(Commande, pk=self.kwargs['pk'])
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        commande = self._get_commande()
-        context['title'] = 'Transformer en approvisionnement'
-        context['message'] = (
-            f'Voulez-vous transformer la commande {commande.numero} '
-            f'en approvisionnement ?'
-        )
-        context['submit_icon'] = 'fa fa-check'
-        context['submit_label'] = 'Transformer'
-        context['commande'] = commande
-        return context
-
-    def post(self, request, *args, **kwargs):
-        commande = self._get_commande()
+    def post(self, request, pk):
+        commande = get_object_or_404(Commande, pk=pk)
+        commentaire = request.POST.get('commentaire', '').strip()
         try:
-            approv = transformer_commande(
+            valider_commande(
                 commande_id=commande.pk,
                 current_user=request.user,
+                commentaire=commentaire,
             )
-            # Rediriger vers l'approvisionnement créé
-            redirect_url = reverse('approvisionnement_details', args=[approv.pk])
-        except Exception as e:
-            # Gérer l'erreur
-            redirect_url = reverse('commande_details', args=[commande.pk])
-        
+        except Exception:
+            pass
+
+        next_url = request.POST.get('next') or reverse('commande_details', args=[commande.pk])
         if is_htmx(request):
             response = HttpResponse()
-            response['HX-Redirect'] = redirect_url
+            response['HX-Redirect'] = next_url
             return response
-        return redirect(redirect_url)
+        return redirect(next_url)
 
 
-# ── PDF Views ─────────────────────────────────────────────────────────────────
+# ── Workflow: Refus par la Direction ──────────────────────────────────────────
 
-class BonCommandePdfView(RoleRequiredMixin, View):
+class CommandeRefuserView(RoleRequiredMixin, View):
     allowed_roles = [ROLE_ADMIN]
 
+    def post(self, request, pk):
+        commande = get_object_or_404(Commande, pk=pk)
+        motif = request.POST.get('motif_refus', '').strip() or "Non spécifié par la Direction"
+        try:
+            refuser_commande(
+                commande_id=commande.pk,
+                current_user=request.user,
+                motif_refus=motif,
+            )
+        except Exception:
+            pass
+
+        next_url = request.POST.get('next') or reverse('commande_details', args=[commande.pk])
+        if is_htmx(request):
+            response = HttpResponse()
+            response['HX-Redirect'] = next_url
+            return response
+        return redirect(next_url)
+
+
+# ── Génération automatique des commandes ──────────────────────────────────────
+
+class CommandeAutoSuggestView(RoleRequiredMixin, TemplateView):
+    allowed_roles = [ROLE_ADMIN, ROLE_GERANT_STOCK, ROLE_GERANT_MAGASIN]
+    template_name = 'commandes/commande_auto_suggest.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        rows = calculer_besoins_reapprovisionnement()
+        ctx.update({
+            'rows': rows,
+            'total_estime': sum(r['total_estime'] for r in rows),
+            'nb_articles': len(rows),
+            'nb_rupture': sum(1 for r in rows if r['urgence'] == 'rupture'),
+            'nb_critique': sum(1 for r in rows if r['urgence'] == 'critique'),
+            'nb_alerte': sum(1 for r in rows if r['urgence'] == 'alerte'),
+        })
+        return ctx
+
+
+class CommandeGenererAutoView(RoleRequiredMixin, View):
+    allowed_roles = [ROLE_ADMIN, ROLE_GERANT_STOCK, ROLE_GERANT_MAGASIN]
+
+    def post(self, request):
+        try:
+            commande = generer_commande_automatique(current_user=request.user)
+            return redirect('commande_details', pk=commande.pk)
+        except Exception as e:
+            return redirect('commande_auto_suggest')
+
+
+# ── PDF Views modernes ────────────────────────────────────────────────────────
+
+class BonCommandePdfView(RoleRequiredMixin, View):
+    allowed_roles = [ROLE_ADMIN, ROLE_GERANT_STOCK, ROLE_GERANT_MAGASIN]
+
     def get(self, request, pk):
-        from utils.pdf_generator import DocumentGenerator
-        commande = get_object_or_404(
-            Commande.objects.select_related('fournisseur', 'devise'), pk=pk
-        )
+        commande = get_object_or_404(Commande, pk=pk)
+        # Règle médico-légale : si non admin, la commande doit être validée
+        if not request.user.is_superuser and commande.statut != Commande.VALIDEE:
+            return HttpResponse(
+                "Le bon de commande officiel ne peut être imprimé qu'après validation de la Direction.",
+                status=403,
+            )
         details = liste_details_commande(commande=commande)
-        gen = DocumentGenerator(
-            filename=f'bon_commande_{commande.numero}.pdf',
-            title=f'Bon de Commande N° {commande.numero}',
-        )
-        return gen.generate_bon_commande_fournisseur(commande=commande, details=details, avec_prix=True)
+        return generer_bon_commande_pdf(commande=commande, details=details, request=request)
 
 
 class ProformaPdfView(RoleRequiredMixin, View):
-    allowed_roles = [ROLE_ADMIN]
+    allowed_roles = [ROLE_ADMIN, ROLE_GERANT_STOCK, ROLE_GERANT_MAGASIN]
 
     def get(self, request, pk):
-        from utils.pdf_generator import DocumentGenerator
-        commande = get_object_or_404(
-            Commande.objects.select_related('fournisseur', 'devise'), pk=pk
-        )
+        commande = get_object_or_404(Commande, pk=pk)
         details = liste_details_commande(commande=commande)
-        gen = DocumentGenerator(
-            filename=f'proforma_{commande.numero}.pdf',
-            title=f'Demande de Proforma N° {commande.numero}',
-        )
-        return gen.generate_bon_commande_fournisseur(commande=commande, details=details, avec_prix=False)
+        return generer_bon_commande_pdf(commande=commande, details=details, request=request)

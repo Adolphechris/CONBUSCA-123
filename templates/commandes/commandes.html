@@ -23,6 +23,9 @@
             <div class="content table-responsive display">
               <div class="row" style="margin-bottom:10px;">
                 <div class="col-xs-12" style="display:flex; justify-content:flex-end; gap:8px; align-items:center;">
+                  <a href="{% url 'commande_auto_suggest' %}" class="btn btn-info btn-sm">
+                    <i class="fa fa-magic"></i> COMMANDE AUTO / BESOINS
+                  </a>
                   <a href="{% url 'commande_create' %}" class="btn btn-success btn-sm">
                     <i class="fa fa-plus"></i> NOUVELLE COMMANDE
                   </a>
@@ -45,9 +48,9 @@
                 <tbody>
                   {% for commande in liste_commandes %}
                   <tr>
-                    <td><span style="font-family:monospace;">#{{ commande.numero }}</span></td>
+                    <td><span style="font-family:monospace; font-weight:bold;">#{{ commande.numero }}</span></td>
                     <td>{{ commande.date_commande|date:"d/m/Y" }}</td>
-                    <td>{{ commande.fournisseur }}</td>
+                    <td>{{ commande.fournisseur|default:"Multi-fournisseurs" }}</td>
                     <td>
                       {% if commande.devise %}
                         <span style="font-weight:600;">{{ commande.devise.code }}</span>
@@ -62,10 +65,18 @@
                       </strong>
                     </td>
                     <td class="text-center">
-                      {% if commande.actif %}
-                        <span class="label label-success">En cours</span>
+                      {% if commande.statut == 'BROUILLON' %}
+                        <span class="label label-default"><i class="fa fa-pencil"></i> Brouillon</span>
+                      {% elif commande.statut == 'EN_ATTENTE' %}
+                        <span class="label label-warning" style="background:#f39c12;"><i class="fa fa-clock-o"></i> En attente</span>
+                      {% elif commande.statut == 'VALIDEE' %}
+                        <span class="label label-success" style="background:#26B99A;"><i class="fa fa-check"></i> Validée</span>
+                      {% elif commande.statut == 'REFUSEE' %}
+                        <span class="label label-danger" style="background:#d9534f;"><i class="fa fa-times"></i> Refusée</span>
+                      {% elif commande.statut == 'CLOTUREE' %}
+                        <span class="label label-primary"><i class="fa fa-lock"></i> Clôturée</span>
                       {% else %}
-                        <span class="label label-default">Clôturée</span>
+                        <span class="label label-default">{{ commande.get_statut_display }}</span>
                       {% endif %}
                     </td>
                     <td class="text-center">

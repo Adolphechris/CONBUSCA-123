@@ -1,0 +1,116 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %} Soumettre une demande de décaissement {% endblock title %}
+
+{% block content %}
+<div class="right_col" role="main">
+  <div class="">
+    <div class="page-title">
+      <div class="title_left">
+        <h3><i class="fa fa-paper-plane text-navy"></i> Demande de Décaissement de Caisse</h3>
+      </div>
+      <div class="title_right text-right">
+        <a href="{% url 'caisse_details' caisse_courante.pk %}" class="btn btn-default btn-sm">
+          <i class="fa fa-arrow-left"></i> Retour à la caisse
+        </a>
+      </div>
+    </div>
+    <div class="clearfix"></div>
+
+    <div class="row">
+      <div class="col-md-8 col-md-offset-2">
+        <div class="x_panel">
+          <div class="x_title">
+            <h2>Soumission de la demande à l'arbitrage de la Direction — Caisse #{{ caisse_courante.caisse.nom }}</h2>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+
+            <div class="alert alert-warning">
+              <i class="fa fa-shield"></i>
+              <strong>Procédure médico-légale de caisse :</strong>
+              Cette demande n'affecte pas le solde de la caisse immédiatement. Une fois soumise, elle apparaît dans le <strong>Cockpit Direction</strong>.
+              Dès que la Direction l'approuve, vous recevrez une notification et vous pourrez l'exécuter pour décaisser physiquement le montant et imprimer votre Manifeste de Décaissement.
+            </div>
+
+            <form method="post" class="form-horizontal form-label-left">
+              {% csrf_token %}
+
+              <div class="form-group">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12">Montant sollicité (FC) <span class="text-danger">*</span></label>
+                <div class="col-md-9 col-sm-9 col-xs-12">
+                  <input type="number" name="montant" class="form-control" placeholder="Montant en FC" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12">Rubrique de caisse <span class="text-danger">*</span></label>
+                <div class="col-md-9 col-sm-9 col-xs-12">
+                  <select name="rubrique" class="form-control" required>
+                    <option value="">-- Sélectionner une rubrique --</option>
+                    {% for rub in rubriques %}
+                      <option value="{{ rub.pk }}">{{ rub.nom }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12">Motif du décaissement <span class="text-danger">*</span></label>
+                <div class="col-md-9 col-sm-9 col-xs-12">
+                  <textarea name="motif" class="form-control" rows="3" required placeholder="Motif précis de la sortie de caisse sollicitée..."></textarea>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12">Pièce / Référence justificative</label>
+                <div class="col-md-9 col-sm-9 col-xs-12">
+                  <input type="text" name="reference" class="form-control" placeholder="Ex: N° Facture, Reçu N°, Facture proforma...">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12">Fournisseur (Bénéficiaire)</label>
+                <div class="col-md-9 col-sm-9 col-xs-12">
+                  <select name="fournisseur" class="form-control">
+                    <option value="">-- Aucun --</option>
+                    {% for f in fournisseurs %}
+                      <option value="{{ f.pk }}">{{ f.nom }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12">Agent concerné</label>
+                <div class="col-md-9 col-sm-9 col-xs-12">
+                  <select name="agent" class="form-control">
+                    <option value="">-- Aucun --</option>
+                    {% for a in agents %}
+                      <option value="{{ a.pk }}">{{ a.nom }} {{ a.prenom }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <div class="ln_solid"></div>
+              <div class="form-group">
+                <div class="col-md-9 col-sm-9 col-xs-12 col-md-offset-3">
+                  <a href="{% url 'caisse_details' caisse_courante.pk %}" class="btn btn-default">Annuler</a>
+                  <button type="submit" class="btn btn-success">
+                    <i class="fa fa-paper-plane"></i> Soumettre la demande à la Direction
+                  </button>
+                </div>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock content %}

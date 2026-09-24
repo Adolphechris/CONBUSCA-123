@@ -1,6 +1,6 @@
 {% load static %}
 {% load user_tags %}
-    <div class="left_col scroll-view">
+<div class="scroll-view" style="overflow: hidden; width: 100%;">
         <div class="navbar nav_title" style="border: 0;">
             <a href="" class="site_title"><i class="fa fa-spinner"></i> <span>ESM V.1</span></a>
         </div>
@@ -14,7 +14,7 @@
                 {% if user.photo %}
                 <img src="{{ user.photo.url }}" alt="..." class="img-circle profile_img">
                 {% else %}
-                <img src="{% static 'images/user.png' %}" alt="..." class="img-circle profile_img">
+                <img src="{% static 'img/user.png' %}" alt="..." class="img-circle profile_img">
                 {% endif %}
             </div>
             <div class="profile_info">
@@ -27,7 +27,6 @@
         </div>
         {% endif %}
         <!-- /menu profile quick info -->
-        <br />
 
         <!-- sidebar menu -->
         <div id="sidebar-menu" class="main_menu_side hidden-print main_menu">
@@ -36,6 +35,16 @@
 
                     <!-- Tableau de bord : tous les rôles -->
                     <li id="index"><a href="{% url 'index' %}"><i class="fa fa-home"></i> Tableau de bord </a></li>
+
+                    <!-- Cockpit Direction : Superadmin uniquement -->
+                    {% if user.is_superuser %}
+                    <li id="direction_cockpit">
+                        <a href="{% url 'direction_cockpit' %}" style="background: rgba(38, 185, 154, 0.1);">
+                            <i class="fa fa-tachometer" style="color: #26B99A;"></i> Cockpit Direction
+                            <span class="label label-success pull-right" style="margin-top:2px;">Direction</span>
+                        </a>
+                    </li>
+                    {% endif %}
 
                     <!-- Factures : Admin, Facturier, Gérant Magasin -->
                     {% if user|has_role:"admin,facturier,gerant_magasin" %}
@@ -74,9 +83,19 @@
                     </li>
                     {% endif %}
 
-                    <!-- Commandes, Fournisseurs : Admin uniquement -->
+                    <!-- Commandes : Admin, Gérant Stock, Gérant Magasin -->
+                    {% if user|has_role:"admin,gerant_stock,gerant_magasin" %}
+                    <li id="commandes"><a><i class="fa fa-file-text-o"></i> Commandes <span class="fa fa-chevron-down"></span></a>
+                        <ul class="nav child_menu">
+                            <li id="liste_commandes"><a href="{% url 'commandes' %}">Toutes les commandes</a></li>
+                            <li id="nouvelle_commande"><a href="{% url 'commande_create' %}">Nouvelle commande</a></li>
+                            <li id="commande_auto"><a href="{% url 'commande_auto_suggest' %}">Analyse & Commande auto</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- Fournisseurs : Admin uniquement -->
                     {% if user|is_admin %}
-                    <li id="commandes"><a href="{% url 'commandes' %}"><i class="fa fa-file-text-o"></i> Commandes </a></li>
                     <li id="fournisseurs"><a href="{% url 'fournisseurs' %}"><i class="fa fa-list-ul"></i> Fournisseurs </a></li>
                     {% endif %}
 

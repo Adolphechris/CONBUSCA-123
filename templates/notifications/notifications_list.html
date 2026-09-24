@@ -1,0 +1,107 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %}Notifications Internes{% endblock title %}
+
+{% block content %}
+<div class="right_col" role="main">
+    <div class="">
+        <div class="page-title">
+            <div class="title_left">
+                <h3><i class="fa fa-bell"></i> Centre des Notifications Internes</h3>
+            </div>
+            <div class="title_right">
+                <div class="pull-right">
+                    <form method="post" action="{% url 'notifications_tout_lire' %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-default btn-sm">
+                            <i class="fa fa-check-square-o"></i> Tout marquer comme lu
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="clearfix"></div>
+
+        <div class="row">
+            <div class="col-md-12 col-sm-12 col-xs-12">
+                <div class="x_panel">
+                    <div class="x_title">
+                        <h2>Historique et messages du système</h2>
+                        <ul class="nav navbar-right panel_toolbox">
+                            <li class="btn-group" role="group">
+                                <a href="?filtre=toutes" class="btn btn-xs {% if filtre_actif == 'toutes' %}btn-primary{% else %}btn-default{% endif %}">
+                                    Toutes
+                                </a>
+                                <a href="?filtre=non_lues" class="btn btn-xs {% if filtre_actif == 'non_lues' %}btn-warning{% else %}btn-default{% endif %}">
+                                    Non lues ({{ nb_non_lues }})
+                                </a>
+                            </li>
+                        </ul>
+                        <div class="clearfix"></div>
+                    </div>
+                    <div class="x_content">
+                        {% if notifications %}
+                        <div class="list-group">
+                            {% for notif in notifications %}
+                            <div class="list-group-item {% if not notif.lu %}list-group-item-warning{% endif %}" style="margin-bottom: 8px; border-radius: 4px;">
+                                <div class="row">
+                                    <div class="col-md-1 col-sm-2 text-center" style="font-size: 26px; padding-top: 5px;">
+                                        {% if notif.type_notification == 'VALIDATION' %}
+                                            <i class="fa fa-check-circle text-success"></i>
+                                        {% elif notif.type_notification == 'REFUS' %}
+                                            <i class="fa fa-times-circle text-danger"></i>
+                                        {% elif notif.type_notification == 'URGENT' %}
+                                            <i class="fa fa-exclamation-triangle text-warning"></i>
+                                        {% else %}
+                                            <i class="fa fa-info-circle text-info"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-9 col-sm-8">
+                                        <h4 class="list-group-item-heading" style="font-weight: bold; margin-bottom: 5px;">
+                                            {{ notif.titre }}
+                                            {% if not notif.lu %}
+                                            <span class="label label-danger">Nouveau</span>
+                                            {% endif %}
+                                        </h4>
+                                        <p class="list-group-item-text" style="color: #444; font-size: 13px;">
+                                            {{ notif.message }}
+                                        </p>
+                                        <small style="color: #888;">
+                                            <i class="fa fa-clock-o"></i> {{ notif.date_creation|date:"d/m/Y H:i:s" }}
+                                            {% if notif.emetteur %} | Émis par : <strong>{{ notif.emetteur.username }}</strong>{% endif %}
+                                        </small>
+                                    </div>
+                                    <div class="col-md-2 col-sm-2 text-right" style="padding-top: 10px;">
+                                        {% if notif.lien %}
+                                        <a href="{{ notif.lien }}" class="btn btn-sm btn-primary" title="Accéder à l'élément">
+                                            <i class="fa fa-external-link"></i> Voir
+                                        </a>
+                                        {% endif %}
+                                        {% if not notif.lu %}
+                                        <form method="post" action="{% url 'notification_lire' notif.pk %}" style="display:inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-default" title="Marquer comme lu">
+                                                <i class="fa fa-check"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info text-center" style="padding: 30px;">
+                            <i class="fa fa-bell-slash-o" style="font-size: 40px; margin-bottom: 10px; display: block;"></i>
+                            <p style="font-size: 15px;">Aucune notification pour le moment.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

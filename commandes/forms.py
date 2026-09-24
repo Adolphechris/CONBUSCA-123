@@ -9,13 +9,18 @@ from .models import Commande, DetailsCommande
 class CommandeCreateForm(forms.ModelForm):
     class Meta:
         model = Commande
-        exclude = ['numero', 'actif', 'cree_par', 'modifie_par']
+        exclude = ['numero', 'actif', 'cree_par', 'modifie_par', 'valide_par', 'date_validation', 'commentaire_decision', 'statut']
         widgets = {
             'date_commande': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'fournisseur': forms.Select(attrs={'class': 'form-control js-simple-select'}),
             'devise': forms.Select(attrs={'class': 'form-control js-simple-select'}),
             'taux': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.0001', 'min': '0'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['fournisseur'].required = False
+        self.fields['fournisseur'].empty_label = "--- Multi-fournisseurs (interne) ---"
 
 
 class ArticleCommandeAddForm(forms.ModelForm):

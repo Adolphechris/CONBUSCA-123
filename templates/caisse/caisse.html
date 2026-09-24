@@ -401,7 +401,22 @@
                     <div class="x_panel">
                         <div class="x_title">
                             <h2><i class="fa fa-calculator"></i> Opérations de la #{{ caisse.nom }}</h2>
-                            <ul class="nav navbar-right panel_toolbox">
+                            <ul class="nav navbar-right panel_toolbox" style="display:flex; align-items:center; gap:8px;">
+                                <li>
+                                    <a href="{% url 'decaissement_nouveau' caisse_courante.pk %}" class="btn btn-danger btn-sm text-white" style="color:#fff;">
+                                        <i class="fa fa-paper-plane"></i> Demander un décaissement
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'decaissements_list' caisse_courante.pk %}" class="btn btn-default btn-sm">
+                                        <i class="fa fa-list"></i> Décaissements
+                                        {% if nb_decaissements_approuves %}
+                                            <span class="badge" style="background:#26B99A; color:#fff;" title="Prêts pour exécution">{{ nb_decaissements_approuves }} à payer</span>
+                                        {% elif nb_decaissements_en_attente %}
+                                            <span class="badge" style="background:#f39c12; color:#fff;" title="En attente de la Direction">{{ nb_decaissements_en_attente }}</span>
+                                        {% endif %}
+                                    </a>
+                                </li>
                                 <li>
                                     {% if caisse_courante.est_ouverte %}
                                         <button type="button" class="btn btn-warning btn-sm"

@@ -1,0 +1,142 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %} Suivi des Décaissements — Caisse {% endblock title %}
+
+{% block content %}
+<div class="right_col" role="main">
+  <div class="">
+    <div class="page-title">
+      <div class="title_left">
+        <h3><i class="fa fa-list text-navy"></i> Suivi des Demandes de Décaissement</h3>
+      </div>
+      <div class="title_right text-right">
+        <a href="{% url 'decaissement_nouveau' caisse_courante.pk %}" class="btn btn-success btn-sm">
+          <i class="fa fa-plus"></i> Nouvelle demande
+        </a>
+        <a href="{% url 'caisse_details' caisse_courante.pk %}" class="btn btn-default btn-sm">
+          <i class="fa fa-arrow-left"></i> Retour à la caisse
+        </a>
+      </div>
+    </div>
+    <div class="clearfix"></div>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade in" role="alert">
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+          {{ msg }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="row">
+      <div class="col-md-12">
+        <div class="x_panel">
+          <div class="x_title">
+            <h2>Historique des demandes de décaissement — Caisse #{{ caisse_courante.caisse.nom }}</h2>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+            {% if demandes %}
+              <div class="table-responsive">
+                <table class="table table-striped jambo_table bulk_action">
+                  <thead>
+                    <tr class="headings">
+                      <th class="column-title">N° Demande</th>
+                      <th class="column-title">Date</th>
+                      <th class="column-title">Rubrique</th>
+                      <th class="column-title">Motif</th>
+                      <th class="column-title text-right">Montant initial</th>
+                      <th class="column-title text-right">Montant autorisé</th>
+                      <th class="column-title text-center">Statut</th>
+                      <th class="column-title text-center">Actions / Impression</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for d in demandes %}
+                    <tr>
+                      <td><span style="font-family:monospace; font-weight:bold;">#DEC-{{ d.pk }}</span></td>
+                      <td>{{ d.date_demande|date:"d/m/Y H:i" }}</td>
+                      <td>{{ d.rubrique.nom }}</td>
+                      <td>{{ d.motif }}</td>
+                      <td class="text-right">{{ d.montant|floatformat:0 }} FC</td>
+                      <td class="text-right fw-bold text-success">
+                        {% if d.montant_approuve %}
+                          {{ d.montant_approuve|floatformat:0 }} FC
+                        {% else %}—{% endif %}
+                      </td>
+                      <td class="text-center">
+                        {% if d.statut == 'EN_ATTENTE' %}
+                          <span class="label label-warning" style="background:#f39c12;"><i class="fa fa-clock-o"></i> En attente</span>
+                        {% elif d.statut == 'APPROUVEE' %}
+                          <span class="label label-success" style="background:#26B99A;"><i class="fa fa-check"></i> Prêt à payer</span>
+                        {% elif d.statut == 'REFUSEE' %}
+                          <span class="label label-danger"><i class="fa fa-times"></i> Refusé</span>
+                        {% elif d.statut == 'EXECUTEE' %}
+                          <span class="label label-primary"><i class="fa fa-check-circle"></i> Exécuté</span>
+                        {% endif %}
+                      </td>
+                      <td class="text-center">
+                        {% if d.statut == 'APPROUVEE' or d.statut == 'EXECUTEE' %}
+                          <a href="{% url 'decaissement_manifeste_pdf' d.pk %}" target="_blank" class="btn btn-default btn-xs" title="Imprimer le manifeste">
+                            <i class="fa fa-file-pdf-o text-danger"></i> Manifeste PDF
+                          </a>
+                        {% endif %}
+
+                        {% if d.statut == 'APPROUVEE' %}
+                          <button type="button" class="btn btn-success btn-xs" data-toggle="modal" data-target="#modalExecuter{{ d.pk }}">
+                            <i class="fa fa-play"></i> Exécuter la sortie
+                          </button>
+
+                          {# ── Modal Confirmation Exécution ── #}
+                          <div class="modal fade" id="modalExecuter{{ d.pk }}" tabindex="-1" role="dialog">
+                            <div class="modal-dialog">
+                              <div class="modal-content text-left">
+                                <form method="post" action="{% url 'decaissement_executer' d.pk %}">
+                                  {% csrf_token %}
+                                  <div class="modal-header bg-success text-white">
+                                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                    <h4 class="modal-title"><i class="fa fa-exclamation-triangle"></i> Confirmer l'exécution du décaissement #DEC-{{ d.pk }}</h4>
+                                  </div>
+                                  <div class="modal-body">
+                                    <div class="alert alert-warning">
+                                      <i class="fa fa-warning"></i>
+                                      <strong>Attention :</strong> Cette action débite définitivement la caisse du montant autorisé de <strong>{{ d.montant_final|floatformat:0 }} FC</strong>.
+                                    </div>
+                                    <p>Motif : <em>{{ d.motif }}</em></p>
+                                    {% if d.commentaire_decision %}
+                                      <p>Note Direction : <em>« {{ d.commentaire_decision }} »</em></p>
+                                    {% endif %}
+                                  </div>
+                                  <div class="modal-footer">
+                                    <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+                                    <button type="submit" class="btn btn-success"><i class="fa fa-check"></i> Confirmer le paiement — {{ d.montant_final|floatformat:0 }} FC</button>
+                                  </div>
+                                </form>
+                              </div>
+                            </div>
+                          </div>
+
+                        {% elif d.statut == 'EXECUTEE' and d.mouvement_caisse %}
+                          <span class="label label-default">Mvt #{{ d.mouvement_caisse.pk }}</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="text-center text-muted py-4" style="padding:25px;">
+                Aucune demande de décaissement enregistrée sur cette caisse.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock content %}
