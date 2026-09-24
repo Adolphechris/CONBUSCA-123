@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: esm12-web
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn esm.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: esm.settings.prod
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: esm12-db
+          property: connectionString
+
+databases:
+  - name: esm12-db
+    databaseName: esm
+    user: esm_user
+    plan: free

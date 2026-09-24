@@ -22,9 +22,11 @@ google-cloud-storage==3.1.0
 django-storages==1.14.5
 pytz==2025.1
 
-# Server & WSGI/ASGI pour Google Cloud Run
+# Server & WSGI/ASGI pour Render & Production
 gunicorn==23.0.0
 uvicorn==0.34.0
+dj-database-url==3.1.2
+whitenoise==6.12.0
 
 # API REST (pour v2.0)
 djangorestframework==3.15.2  # Ajouté pour API REST
